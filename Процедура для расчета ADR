@@ -1,0 +1,36 @@
+CREATE OR REPLACE PROCEDURE calculate_adr(
+    p_start_date IN DATE,
+    p_end_date IN DATE,
+    p_adr OUT NUMBER
+)
+AS
+    v_total_revenue NUMBER := 0;
+    v_total_rooms_sold NUMBER := 0;
+BEGIN
+    -- Проверка корректности дат
+    IF p_start_date > p_end_date THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Дата начала периода не может быть позже даты окончания');
+    END IF;
+    
+    -- Расчет общей чистой выручки от продажи номеров (за вычетом скидок, налогов и доп. услуг)
+    SELECT NVL(SUM(
+           room_rate 
+           - NVL(discount_amount, 0) 
+           - NVL(tax_amount, 0) 
+           - NVL(breakfast_cost, 0)
+           - NVL(other_extra_charges, 0)
+           ), 0)
+    INTO v_total_revenue
+    FROM room_sales
+    WHERE sale_date BETWEEN p_start_date AND p_end_date
+    AND reservation_status = 'CONFIRMED'; -- Только подтвержденные брони
+    
+    -- Расчет общего количества проданных номеров
+    SELECT NVL(COUNT(*), 0)
+    INTO v_total_rooms_sold
+    FROM room_sales
+    WHERE sale_date BETWEEN p_start_date AND p_end_date
+    AND reservation_status = 'CONFIRMED'; -- Только подтвержденные брони
+    
+    -- Расчет ADR (избегаем деления на ноль)
+    IF v_total
