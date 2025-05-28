@@ -1,0 +1,4 @@
+UPDATE rooms
+SET status = 'Чистый',
+    last_cleaned = CURRENT_TIMESTAMP
+WHERE status = 'Назначен к уборке';
