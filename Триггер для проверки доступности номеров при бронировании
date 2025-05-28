@@ -1,0 +1,60 @@
+DELIMITER //
+
+CREATE TRIGGER check_room_availability_before_booking
+BEFORE INSERT ON reservations
+FOR EACH ROW
+BEGIN
+    DECLARE available_rooms INT;
+    DECLARE room_type_name VARCHAR(100);
+    
+    -- Получаем количество доступных номеров данного типа на указанные даты
+    SELECT COUNT(*) INTO available_rooms
+    FROM rooms r
+    WHERE r.room_type_id = NEW.room_type_id
+    AND r.room_id NOT IN (
+        SELECT res.room_id
+        FROM reservations res
+        WHERE res.room_id = r.room_id
+        AND (
+            (NEW.check_in_date BETWEEN res.check_in_date AND res.check_out_date)
+            OR (NEW.check_out_date BETWEEN res.check_in_date AND res.check_out_date)
+            OR (res.check_in_date BETWEEN NEW.check_in_date AND NEW.check_out_date)
+        )
+        AND res.status NOT IN ('CANCELLED', 'NO_SHOW')
+    );
+    
+    -- Получаем название типа номера для сообщения об ошибке
+    SELECT room_type INTO room_type_name
+    FROM room_types
+    WHERE room_type_id = NEW.room_type_id;
+    
+    -- Если нет доступных номеров, генерируем ошибку
+    IF available_rooms <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = CONCAT('Нет доступных номеров типа "', room_type_name, 
+                                '" на выбранные даты с ', NEW.check_in_date, 
+                                ' по ', NEW.check_out_date);
+    END IF;
+    
+    -- Если номер явно указан, проверяем его доступность
+    IF NEW.room_id IS NOT NULL THEN
+        IF EXISTS (
+            SELECT 1
+            FROM reservations res
+            WHERE res.room_id = NEW.room_id
+            AND (
+                (NEW.check_in_date BETWEEN res.check_in_date AND res.check_out_date)
+                OR (NEW.check_out_date BETWEEN res.check_in_date AND res.check_out_date)
+                OR (res.check_in_date BETWEEN NEW.check_in_date AND NEW.check_out_date)
+            )
+            AND res.status NOT IN ('CANCELLED', 'NO_SHOW')
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = CONCAT('Номер ', NEW.room_id, 
+                                    ' уже забронирован на выбранные даты с ', 
+                                    NEW.check_in_date, ' по ', NEW.check_out_date);
+        END IF;
+    END IF;
+END//
+
+DELIMITER ;
