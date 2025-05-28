@@ -1,0 +1,26 @@
+SELECT 
+    g.guest_id,
+    CONCAT(g.last_name, ' ', g.first_name) AS guest_name,
+    r.reservation_id,
+    rt.room_type,
+    DATEDIFF(r.check_out_date, r.check_in_date) AS nights,
+    rt.base_price * DATEDIFF(r.check_out_date, r.check_in_date) AS room_cost,
+    COALESCE(SUM(s.service_price), 0) AS services_cost,
+    (rt.base_price * DATEDIFF(r.check_out_date, r.check_in_date)) + COALESCE(SUM(s.service_price), 0) AS total_amount
+FROM 
+    guests g
+JOIN 
+    reservations r ON g.guest_id = r.guest_id
+JOIN 
+    room_types rt ON r.room_type_id = rt.room_type_id
+LEFT JOIN 
+    reservation_services rs ON r.reservation_id = rs.reservation_id
+LEFT JOIN 
+    services s ON rs.service_id = s.service_id
+WHERE 
+    r.status = 'ACTIVE' -- или другой подходящий статус для текущих бронирований
+GROUP BY 
+    g.guest_id, g.last_name, g.first_name, r.reservation_id, rt.room_type, 
+    r.check_in_date, r.check_out_date, rt.base_price
+ORDER BY 
+    g.last_name, g.first_name;
